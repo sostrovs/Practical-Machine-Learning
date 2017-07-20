@@ -1,0 +1,126 @@
+---
+title: "Practical Machine Learning Project"
+author: "Sergey Ostrovsky"
+date: "July 19, 2017"
+output: pdf_document
+---
+
+Background
+=========
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+Data
+===========
+
+The training data for this project are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har. If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment.
+
+###**How model was built**
+
+The outcome variable is classe, a factor variable with 5 levels. For this data set, participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in 5 different fashions:
+
+* exactly according to the specification (Class A)
+* throwing the elbows to the front (Class B)
+* lifting the dumbbell only halfway (Class C)
+* lowering the dumbbell only halfway (Class D)
+* throwing the hips to the front (Class E)
+
+Class A corresponds to the specified execution of the exercise, while the other 4 classes correspond to common mistakes.
+
+Prediction evaluations will be based on maximizing the accuracy and minimizing the out-of-sample error. All other available variables after cleaning will be used for prediction.
+
+Three models will be tested with Bootstrapped Aggregation, Boosted C5.0, and Random Forest algorithms. The model with the highest accuracy will be chosen for our final model.
+
+
+###**Use of cross validation**
+
+Cross-validation will be used by splitting our training data into two subsamples without replacement using 75% for training set and 25% for testing set. Our models will be fitted on the training sample data and tested on the testing sample data. Finally, the most accurate model will be tested on the original Testing data set. 
+
+###**Expected out of sample error**
+
+The expected out-of-sample error will correspond to the quantity: 1-accuracy in the cross-validation data. Accuracy is the proportion of correct classified observation over the total sample in the subTesting data set. Expected accuracy is the expected accuracy in the out-of-sample data set (i.e. original testing data set). Thus, the expected value of the out-of-sample error will correspond to the expected number of missclassified observations/total observations in the Test data set, which is the quantity: 1-accuracy found from the cross-validation data set.
+
+Loading And Preparing Datasets
+==========
+```{r}
+set.seed(123567)
+## Downloads and extacts data from given dataset
+wd <- getwd()
+training_url = "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testing_url = "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+training_file <- "pml-training.csv"
+if (!file.exists(training_file)) {
+    download.file(training_url, file.path(wd, training_file))
+}
+
+testing_file <- "pml-testing.csv"
+if (!file.exists(testing_file)) {
+    download.file(testing_url, file.path(wd, testing_file))
+}
+
+train <- read.csv(training_file, na.strings=c("NA","#DIV/0!", ""))
+test <- read.csv(testing_file, na.strings=c("NA","#DIV/0!", ""))
+```
+Cleaning Datasets From Useless Columns
+=============
+```{r}
+# Delete columns where missing values exist
+train <- train[,colSums(is.na(train)) == 0]
+test <- test[,colSums(is.na(test)) == 0]
+
+# Delete descriptive columns
+train <- train[, -c(1:7)]
+test <- test[, -c(1:7)]
+```
+
+Partitioning the training dataset for cross-validation
+===========
+```{r}
+library(caret)
+inTrain <- createDataPartition(y = train$classe, p = 0.75, list = FALSE)
+training <- train[inTrain,]
+testing <- train[-inTrain,]
+```
+First prediction model: Bootstrapped Aggregation
+=============
+```{r}
+library(ipred)
+baFit <- bagging(classe ~. , data=training, method="class")
+baPredict <- predict(baFit, testing, type = "class")
+confusionMatrix(baPredict, testing$classe)
+```
+Second prediction model: Using Boosted C5.0
+=============
+```{r}
+library(C50)
+bC50Fit <- C5.0(classe ~. , data=training, trials=10)
+bc50Predict <- predict(bC50Fit, testing, type = "class")
+confusionMatrix(bc50Predict, testing$classe)
+```
+
+Third prediction model: Using Random Forest
+=============
+```{r}
+library(randomForest)
+rfFit <- randomForest(classe ~. , data=training, method="class")
+rfPredict <- predict(rfFit, testing, type = "class")
+confusionMatrix(rfPredict, testing$classe)
+```
+Decision
+============
+From the result above we can see that Random Forest algorithm has highest accuracy. Thus, this model will be chosed for final prediction with original Testing set.
+
+Submission
+===========
+```{r}
+predict(rfFit, test, type = "class")
+```
